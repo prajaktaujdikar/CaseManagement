@@ -1,0 +1,59 @@
+﻿@page "/"
+@page "/login"
+
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Users;
+
+@inject UsersService UsersService
+@inject NavigationManager NavigationManager
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudCard>
+    <MudForm @ref="_form">
+        <MudCardContent>
+            <MudText Typo="Typo.h5">Login</MudText>
+            <MudTextField T="string" @bind-Value="_username" Label="Username" Required="true" RequiredError="User name is required!" />
+            <MudTextField T="string" @bind-Value="_password" Label="Password" InputType="InputType.Password" Required="true" RequiredError="Password is required!" />
+            <MudText Typo="Typo.subtitle2" Color="Color.Error">@_errorMessage</MudText>
+        </MudCardContent>
+    </MudForm>
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleLogin">Login</MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    private string _username;
+    private string _password;
+    private string _errorMessage;
+    MudForm _form;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            UsersViewModel user = await UsersService.CheckLogin(_username);
+
+            if (user != null && user.Password == _password)
+            {
+                await CustomAuthenticationStateProvider.AuthenticateUserAsync(user.UserName, user.GetRoleTypeName());
+
+                NavigationManager.NavigateTo("/index");
+            }
+            else
+            {
+                _errorMessage = "Invalid username or password.";
+            }
+        }
+    }
+}

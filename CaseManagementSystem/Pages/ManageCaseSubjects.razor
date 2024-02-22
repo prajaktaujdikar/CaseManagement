@@ -1,0 +1,131 @@
+﻿@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Subjects;
+@using CaseManagementSystem.Data.Users;
+
+@inject UsersService UsersService
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject IDialogService Dialog
+@inject SubjectService SubjectService
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_firstName" Label="First Name" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_lastName" Label="Last Name" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_postCode" Label="Post Code" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudDatePicker Label="Date of Birth" @bind-Date="_dateOfBirth" />
+                    </MudItem>
+                    <MudItem xs="12" Class="align-center">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SearchSubjects" Class="mr-2">Search</MudButton>
+                        <MudButton Variant="Variant.Filled" OnClick="@((e) => OpenManageSubjectsDialog(null))" Class="">Add Subject</MudButton>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTable Items="@_subjects" Hover="true">
+                            <ToolBarContent>
+                                <MudText Typo="Typo.h6">Select Subjects</MudText>
+                                <MudSpacer />
+                            </ToolBarContent>
+                            <HeaderContent>
+                                <MudTh></MudTh>
+                                <MudTh>Firstname</MudTh>
+                                <MudTh>Lastname</MudTh>
+                                <MudTh>DOB</MudTh>
+                                <MudTh>Address1</MudTh>
+                                <MudTh>City</MudTh>
+                                <MudTh>Post Code</MudTh>
+                                <MudTh>Country</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Select Subject">
+                                    <MudTooltip Text="Select Subject" Color="Color.Primary" Placement="Placement.Top">
+                                        <MudButton Variant="Variant.Filled" OnClick="@((e) => SelectSubject(@context.Id))" Class="">Select</MudButton>
+                                    </MudTooltip>
+                                </MudTd>
+                                <MudTd DataLabel="Firstname">@context.FirstName</MudTd>
+                                <MudTd DataLabel="Lastname">@context.LastName</MudTd>
+                                <MudTd DataLabel="DOB">@(context.DateOfBirth != null ? context.DateOfBirth.Value.ToString("yyyy-MM-dd") : "")</MudTd>
+                                <MudTd DataLabel="Address1">@context.AddressLine1</MudTd>
+                                <MudTd DataLabel="City">@context.City</MudTd>
+                                <MudTd DataLabel="Post Code">@context.Postcode</MudTd>
+                                <MudTd DataLabel="Country">@context.Country</MudTd>
+                            </RowTemplate>
+                            <PagerContent>
+                                <MudTablePager />
+                            </PagerContent>
+                        </MudTable>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+    private string _firstName = "";
+    private string _lastName = "";
+    private string _postCode = "";
+    private DateTime? _dateOfBirth = null;
+    private IEnumerable<SubjectViewModel> _subjects = new List<SubjectViewModel>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+
+        _loading = false;
+    }
+
+    private async Task SearchSubjects()
+    {
+        string dob = "";
+        if (_dateOfBirth != null)
+        {
+            dob = _dateOfBirth.Value.ToString("yyyy-MM-dd");
+        }
+        _subjects = await SubjectService.SearchSubjectsAsync(_firstName, _lastName, _postCode, dob);
+    }
+
+    private async Task SelectSubject(Guid Id)
+    {
+        MudDialog.Close(DialogResult.Ok(Id));
+    }
+
+    private async Task OpenManageSubjectsDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageUser>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageSubjects>("Subjects", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            MudDialog.Close(DialogResult.Ok((Guid)result.Data));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}  

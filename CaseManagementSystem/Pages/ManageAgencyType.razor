@@ -1,0 +1,95 @@
+﻿@using System.Net.Http.Json
+@using CaseManagementSystem.Data.AgencyTypes
+@using System.Net;
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Users;
+
+@inject AgencyTypeService AgencyTypeService
+@inject UsersService UsersService
+@inject IDialogService Dialog
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_AgencyTypeView.Name" Label="Name" Variant="Variant.Outlined" Required="true" RequiredError="Name is required!"></MudTextField>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAgencyType">Apply Changes</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private AgencyTypeViewModel _AgencyTypeView = new AgencyTypeViewModel();
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id != null && Id != Guid.Empty)
+        {
+            await GetAgencyTypeById();
+        }
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        _loading = false;
+    }
+
+    private async Task GetAgencyTypeById()
+    {
+        _AgencyTypeView = await AgencyTypeService.GetAgencyTypesByIdAsync((Guid)Id);
+    }
+
+
+    public async Task SaveAgencyType()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                _AgencyTypeView.Updated = DateTime.UtcNow;
+                _AgencyTypeView.UpdatedBy = _currentLoginUser.Id;
+
+                if (Id != null && Id != Guid.Empty)
+                {
+                    await AgencyTypeService.UpdateAgencyTypesAsync(_AgencyTypeView);
+                }
+                else
+                {
+                    _AgencyTypeView.Created = DateTime.UtcNow;
+                    _AgencyTypeView.CreatedBy = _currentLoginUser.Id;
+                    await AgencyTypeService.InsertAgencyTypesAsync(_AgencyTypeView);
+                }
+                Snackbar.Add("Successfully saved Agency Type information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again.", Severity.Error);
+            }
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

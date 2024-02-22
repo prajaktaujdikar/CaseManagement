@@ -1,0 +1,182 @@
+﻿@using CMS.DL.Model;
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Cases;
+@using CaseManagementSystem.Data.Companies;
+@using CaseManagementSystem.Data.TitlePrefixes;
+@using CaseManagementSystem.Data.Enum;
+@using CaseManagementSystem.Data.Subjects;
+@using CaseManagementSystem.Data.Documents;
+@using CaseManagementSystem.Data.Users;
+@using System.ComponentModel.DataAnnotations;
+@using System.Text;
+@using System.Text.RegularExpressions;
+
+@inject UsersService UsersService
+@inject SubjectService SubjectService
+@inject ISnackbar Snackbar
+@inject IDialogService Dialog
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject CaseService CaseService
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudCard>
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Details</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudDivider />
+                            <MudCardContent>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Case Number: </MudText>
+                                    <MudText>@_subjectsView.CaseNumber</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Date Created: </MudText>
+                                    <MudText>@_subjectsView.CaseCreated</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Details: </MudText>
+                                    <MudText>@_subjectsView.CaseNotes</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Firstname: </MudText>
+                                    <MudText>@_subjectsView.FirstName</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Lastname: </MudText>
+                                    <MudText>@_subjectsView.LastName</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Email: </MudText>
+                                    <MudText>@_subjectsView.Email</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>DOB: </MudText>
+                                    <MudText>@_subjectsView.DateOfBirth</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Tel No: </MudText>
+                                    <MudText>@_subjectsView.TelephoneNumber</MudText>
+                                </MudItem>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="6">
+                        <MudCard>
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Address</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudDivider />
+                            <MudCardContent>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Address1: </MudText>
+                                    <MudText>@_subjectsView.AddressLine1</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Address2: </MudText>
+                                    <MudText>@_subjectsView.AddressLine2</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Address3: </MudText>
+                                    <MudText>@_subjectsView.AddressLine3</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Post Code: </MudText>
+                                    <MudText>@_subjectsView.Postcode</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>City: </MudText>
+                                    <MudText>@_subjectsView.City</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>County: </MudText>
+                                    <MudText>@_subjectsView.County</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-space-between">
+                                    <MudText>Country: </MudText>
+                                    <MudText>@_subjectsView.Country</MudText>
+                                </MudItem>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCase">Checkout</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private SubjectViewModel _subjectsView = new SubjectViewModel();
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+
+        if (Id != null && Id != Guid.Empty)
+        {
+            await GetSubjectsById();
+        }
+
+        _loading = false;
+    }
+
+    private async Task GetSubjectsById()
+    {
+        _subjectsView = await SubjectService.GetSubjectsWithCaseByCaseIdAsync((Guid)Id);
+    }
+
+    private async Task SaveCase()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                CaseViewModel caseViewModel = await CaseService.GetCasesByIdAsync((Guid)Id);
+                if (caseViewModel != null)
+                {
+                    caseViewModel.Updated = DateTime.UtcNow;
+                    caseViewModel.UpdatedBy = _currentLoginUser.Id;
+                    caseViewModel.Status = (byte?)CaseStatusType.CHECKEDOUT;
+
+                    await CaseService.UpdateCasesAsync(caseViewModel);
+                }
+                
+                Snackbar.Add("Successfully saved Case information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again.", Severity.Error);
+            }
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}  

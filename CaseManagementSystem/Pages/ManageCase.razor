@@ -1,0 +1,332 @@
+﻿@using System.Net.Http.Json
+@using System.Net;
+@using CMS.DL.Model;
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Cases;
+@using CaseManagementSystem.Data.Companies;
+@using CaseManagementSystem.Data.Enum;
+@using CaseManagementSystem.Data.Subjects;
+@using CaseManagementSystem.Data.TraceLevels;
+@using CaseManagementSystem.Data.TraceReason;
+@using CaseManagementSystem.Data.Users;
+
+@inject CaseService CaseService
+@inject CompaniesService CompaniesService
+@inject TraceLevelService TraceLevelService
+@inject TraceReasonService TraceReasonService
+@inject SubjectService SubjectService
+@inject UsersService UsersService
+@inject IDialogService Dialog
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6" Class="d-flex align-center">
+                        <MudAutocomplete T="CompaniesViewModel" Label="Company" @bind-Value="_selectedCompany" SearchFunc="@SearchCompanies" ToStringFunc="@(e=> e==null?null : $"{e.CompanyName}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Required="true" RequiredError="Company is required!">
+                        </MudAutocomplete>
+                        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="@((e) => OpenManageCompanyDialog(null))" Class="ml-3">Add Company</MudButton>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_caseViewModel.CaseNumber" Label="Case Number" Variant="Variant.Outlined" Required="true" RequiredError="Case Number is required!"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudAutocomplete T="TraceLevelViewModel" Label="Trace Level" @bind-Value="_selectedTraceLevel" SearchFunc="@SearchTraceLevels" ToStringFunc="@(e=> e==null?null : $"{e.Name}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        </MudAutocomplete>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="decimal?" @bind-Value="_caseViewModel.Fee" Label="Fee" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="decimal?" @bind-Value="_caseViewModel.DebtAmount" Label="Debt Amount" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudAutocomplete T="TraceReasonViewModel" Label="Trace Reason" @bind-Value="_selectedTraceReason" SearchFunc="@SearchTraceReasons" ToStringFunc="@(e=> e==null?null : $"{e.Name}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        </MudAutocomplete>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_caseViewModel.Notes" Label="Notes" Variant="Variant.Outlined" Lines="3"></MudTextField>
+                    </MudItem>
+                     <MudItem xs="6">
+                        <MudSelect T="byte?" @bind-Value="_caseViewModel.Status" Label="Status" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Required="true" RequiredError="Status is required!">
+                            @foreach (CaseStatusType item in Enum.GetValues(typeof(CaseStatusType)))
+                            {
+                                <MudSelectItem Value="(byte?)item">@item.ToString()</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6" Class="d-flex align-center">
+                        <MudAutocomplete T="UsersViewModel" Label="Client Ref" @bind-Value="_selectedClient" SearchFunc="@SearchClients" ToStringFunc="@(e=> e==null?null : $"{e.GetFullName()}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        </MudAutocomplete>
+                        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="@((e) => OpenManageUserDialog(null, (byte?)RoleType.Client))" Class="ml-3">Add User</MudButton>
+                    </MudItem>
+                    <MudItem xs="6" Class="d-flex align-center">
+                        <MudAutocomplete T="UsersViewModel" Label="End Client" @bind-Value="_selectedAgent" SearchFunc="@SearchAgents" ToStringFunc="@(e=> e==null?null : $"{e.GetFullName()}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        </MudAutocomplete>
+                        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="@((e) => OpenManageUserDialog(null, (byte?)RoleType.Agent))" Class="ml-3">Add User</MudButton>
+                    </MudItem>
+                    <MudItem xs="6" Class="d-flex align-center">
+                        <MudText Class="mr-2">Subject: </MudText>
+                        <MudText Class="mr-5" Style="font-weight: bold;">@_caseViewModel.SubjectName</MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="OpenCaseSubjectsDialog">Lookup Subject</MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCase">Apply Changes</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private CaseViewModel _caseViewModel = new CaseViewModel();
+    private MudForm _form;
+    private bool _loading = true;
+    private CompaniesViewModel _selectedCompany = null;
+    private TraceLevelViewModel _selectedTraceLevel = null;
+    private TraceReasonViewModel _selectedTraceReason = null;
+    private UsersViewModel _selectedAgent = null;
+    private UsersViewModel _selectedClient = null;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+    private Guid? _subjectId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id != null && Id != Guid.Empty)
+        {
+            await GetCaseById();
+
+            if (_caseViewModel.CompanyId != null && _caseViewModel.CompanyId != Guid.Empty)
+            {
+                _selectedCompany = await CompaniesService.GetCompaniesByIdAsync((Guid)_caseViewModel.CompanyId);
+            }
+            if (_caseViewModel.TraceLevelId != null && _caseViewModel.TraceLevelId != Guid.Empty)
+            {
+                _selectedTraceLevel = await TraceLevelService.GetTraceLevelsByIdAsync((Guid)_caseViewModel.TraceLevelId);
+            }
+            if (_caseViewModel.TraceReasonId != null && _caseViewModel.TraceReasonId != Guid.Empty)
+            {
+                _selectedTraceReason = await TraceReasonService.GetTraceReasonByIdAsync((Guid)_caseViewModel.TraceReasonId);
+            }
+            if (_caseViewModel.EndClient != null && _caseViewModel.EndClient != Guid.Empty)
+            {
+                _selectedAgent = await UsersService.GetUsersByIdAsync((Guid)_caseViewModel.EndClient);
+            }
+            if (_caseViewModel.ClientRef != null && _caseViewModel.ClientRef != Guid.Empty)
+            {
+                _selectedClient = await UsersService.GetUsersByIdAsync((Guid)_caseViewModel.ClientRef);
+            }
+            _subjectId = _caseViewModel.SubjectId;
+        }
+
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+
+        _loading = false;
+    }
+
+    private async Task GetCaseById()
+    {
+        _caseViewModel = await CaseService.GetCasesByIdAsync((Guid)Id);
+    }
+
+    private async Task<IEnumerable<CompaniesViewModel>> SearchCompanies(string value)
+    {
+        IEnumerable<CompaniesViewModel> companiesView = await CompaniesService.GetAllCompaniesAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            companiesView = companiesView.Where(c => c.CompanyName != null && c.CompanyName.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+        else 
+        {
+            _selectedCompany = null;
+        }
+
+        return companiesView;
+    }
+
+    private async Task<IEnumerable<TraceLevelViewModel>> SearchTraceLevels(string value)
+    {
+        IEnumerable<TraceLevelViewModel> traceLevelsView = await TraceLevelService.GetAllTraceLevelsAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            traceLevelsView = traceLevelsView.Where(c => c.Name != null && c.Name.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+        else
+        {
+            _selectedTraceLevel = null;
+        }
+
+        return traceLevelsView;
+    }
+
+    private async Task<IEnumerable<TraceReasonViewModel>> SearchTraceReasons(string value)
+    {
+        IEnumerable<TraceReasonViewModel> traceReasonView = await TraceReasonService.GetAllTraceReasonsAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            traceReasonView = traceReasonView.Where(c => c.Name != null && c.Name.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+        else
+        {
+            _selectedTraceReason = null;
+        }
+
+        return traceReasonView;
+    }
+
+    private async Task<IEnumerable<UsersViewModel>> SearchClients(string value)
+    {
+        IEnumerable<UsersViewModel> allClients = await UsersService.GetAllClientsAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            allClients = allClients.Where(c => c.GetFullName().Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+        else
+        {
+            _selectedClient = null;
+        }
+
+        return allClients;
+    }
+
+    private async Task<IEnumerable<UsersViewModel>> SearchAgents(string value)
+    {
+        IEnumerable<UsersViewModel> allAgents = await UsersService.GetAllAgentsAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            allAgents = allAgents.Where(c => c.GetFullName().Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+        else
+        {
+            _selectedClient = null;
+        }
+
+        return allAgents;
+    }
+
+    private async Task SaveCase()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                _caseViewModel.Updated = DateTime.UtcNow;
+                _caseViewModel.UpdatedBy = _currentLoginUser.Id;
+                _caseViewModel.CompanyId = _selectedCompany?.Id;
+                _caseViewModel.TraceLevelId = _selectedTraceLevel?.Id;
+                _caseViewModel.TraceReasonId = _selectedTraceReason?.Id;
+                _caseViewModel.ClientRef = _selectedClient?.Id;
+                _caseViewModel.EndClient = _selectedAgent?.Id;
+                _caseViewModel.SubjectId = _subjectId;
+
+                if (Id != null && Id != Guid.Empty)
+                {
+                    await CaseService.UpdateCasesAsync(_caseViewModel);
+                }
+                else
+                {
+                    _caseViewModel.Created = DateTime.UtcNow;
+                    _caseViewModel.CreatedBy = _currentLoginUser.Id;
+                    await CaseService.InsertCasesAsync(_caseViewModel);
+                }
+                Snackbar.Add("Successfully saved Case information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again.", Severity.Error);
+            }
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+    private async Task OpenCaseSubjectsDialog()
+    {
+        var parameters = new DialogParameters<ManageCaseSubjects>();
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageCaseSubjects>("Subjects", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            _subjectId = (Guid)result.Data;
+            if (_subjectId != null && _subjectId != Guid.Empty)
+            {
+                SubjectViewModel subject = await SubjectService.GetSubjectsByIdAsync((Guid)_subjectId);
+                if (subject != null)
+                {
+                    _caseViewModel.SubjectName = subject.SubjectName;
+                }
+            }
+        }
+    }
+
+    private async Task OpenManageCompanyDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageCompany>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageCompany>("Company", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            _caseViewModel.CompanyId = (Guid)result.Data;
+            if (_caseViewModel.CompanyId != null && _caseViewModel.CompanyId != Guid.Empty)
+            {
+                _selectedCompany = await CompaniesService.GetCompaniesByIdAsync((Guid)_caseViewModel.CompanyId);
+            }
+        }
+    }
+
+    private async Task OpenManageUserDialog(Guid? Id, byte? RoleType)
+    {
+        var parameters = new DialogParameters<ManageUser>();
+        parameters.Add(x => x.Id, Id);
+        parameters.Add(x => x.RoleTypeValue, RoleType);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageUser>("User", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            if (RoleType == 2)
+            {
+                _caseViewModel.ClientRef = (Guid)result.Data;
+                if (_caseViewModel.ClientRef != null && _caseViewModel.ClientRef != Guid.Empty)
+                {
+                    _selectedClient = await UsersService.GetUsersByIdAsync((Guid)_caseViewModel.ClientRef);
+                }
+            }
+            else if (RoleType == 3)
+            {
+                _caseViewModel.EndClient = (Guid)result.Data;
+                if (_caseViewModel.EndClient != null && _caseViewModel.EndClient != Guid.Empty)
+                {
+                    _selectedAgent = await UsersService.GetUsersByIdAsync((Guid)_caseViewModel.EndClient);
+                }
+            }
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

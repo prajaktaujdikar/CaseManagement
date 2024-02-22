@@ -1,0 +1,191 @@
+﻿@page "/profile"
+
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Companies;
+@using CaseManagementSystem.Data.Enum;
+@using CaseManagementSystem.Data.Users;
+@using System.ComponentModel.DataAnnotations;
+@using System.Text;
+@using System.Text.RegularExpressions;
+
+@inject UsersService UsersService
+@inject CompaniesService CompaniesService
+@inject CountryService CountryService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<PageTitle>User Profile</PageTitle>
+
+<MudCard>
+    <MudForm @ref="_form" @bind-IsValid="@_success">
+        <MudCardContent>
+            <MudGrid Spacing="2">
+                <MudItem xs="3">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.UserName" Label="Username" Variant="Variant.Outlined" Validation="UserNameCheck" Required="true" RequiredError="Username is required!"></MudTextField>
+                </MudItem>
+                <MudItem xs="3">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.Password" Label="Password" Variant="Variant.Outlined" Disabled="true"></MudTextField>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.AddressLine1" Label="Address Line 1" Variant="Variant.Outlined"></MudTextField>
+                </MudItem>
+
+                <MudItem xs="3">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.FirstName" Label="First Name" Variant="Variant.Outlined" Required="true" RequiredError="First name is required!"></MudTextField>
+                </MudItem>
+                <MudItem xs="3">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.LastName" Label="Last Name" Variant="Variant.Outlined"></MudTextField>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.AddressLine2" Label="Address Line 2" Variant="Variant.Outlined"></MudTextField>
+                </MudItem>
+
+                <MudItem xs="6">
+                    <MudAutocomplete T="CompaniesViewModel" Label="Company" @bind-Value="_selectedCompany" SearchFunc="@SearchCompanies" ToStringFunc="@(e=> e==null?null : $"{e.CompanyName}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    </MudAutocomplete>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.AddressLine3" Label="Address Line 3" Variant="Variant.Outlined"></MudTextField>
+                </MudItem>
+
+                <MudItem xs="6">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.EmailAddress" Label="Email Address" Variant="Variant.Outlined" Disabled="true"></MudTextField>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.County" Label="County" Variant="Variant.Outlined"></MudTextField>
+                </MudItem>
+
+                <MudItem xs="3">
+                    <MudDatePicker Label="Last Login" @bind-Date="_currentLoginUser.LastLogin" ReadOnly="true" />
+                </MudItem>
+                <MudItem xs="3">
+                    <MudSelect T="string" Label="Key Contact" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="3">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.City" Label="City" Variant="Variant.Outlined"></MudTextField>
+                </MudItem>
+                <MudItem xs="3">
+                    <MudTextField T="string" @bind-Value="_currentLoginUser.Postcode" Label="Post Code" Variant="Variant.Outlined"></MudTextField>
+                </MudItem>
+
+                <MudItem xs="3">
+                    <MudSelect T="bool" @bind-Value="_currentLoginUser.IsSiteAdmin" Label="Site Admin" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        <MudSelectItem Value="true">Yes</MudSelectItem>
+                        <MudSelectItem Value="false">No</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="3">
+                    <MudSelect T="bool" @bind-Value="_currentLoginUser.IsSuperUser" Label="Super User" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        <MudSelectItem Value="true">Yes</MudSelectItem>
+                        <MudSelectItem Value="false">No</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudAutocomplete T="string" Label="Country" @bind-Value="_currentLoginUser.Country" SearchFunc="@SearchCountries" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    </MudAutocomplete>
+                </MudItem>
+
+                <MudItem xs="3">
+                    <MudSelect T="bool" @bind-Value="_currentLoginUser.IsActive" Label="Is Active" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        <MudSelectItem Value="true">Yes</MudSelectItem>
+                        <MudSelectItem Value="false">No</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="3">
+                    <MudSelect T="byte?" @bind-Value="_currentLoginUser.RoleType" Label="Role" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Required="true" RequiredError="Role type is required!">
+                        @foreach (RoleType item in Enum.GetValues(typeof(RoleType)))
+                        {
+                            if (CustomAuthenticationStateProvider.RoleType() == "Admin" || item != RoleType.Admin && item != RoleType.Client)
+                            {
+                                <MudSelectItem Value="(byte?)item">@item.ToString()</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudForm>
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_success)" OnClick="SaveUser">Apply Changes</MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    private CompaniesViewModel _selectedCompany = null;
+    private MudForm _form;
+    private bool _success;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+
+        if (_currentLoginUser.CompanyId != null && _currentLoginUser.CompanyId != Guid.Empty)
+        {
+            _selectedCompany = await CompaniesService.GetCompaniesByIdAsync((Guid)_currentLoginUser.CompanyId);
+        }
+    }
+
+    private async Task<IEnumerable<CompaniesViewModel>> SearchCompanies(string value)
+    {
+        IEnumerable<CompaniesViewModel> companiesView = await CompaniesService.GetAllCompaniesAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            companiesView = companiesView.Where(c => c.CompanyName != null && c.CompanyName.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        return companiesView;
+    }
+
+    private async Task<IEnumerable<string>> SearchCountries(string value)
+    {
+        await Task.Delay(5);
+
+        IEnumerable<string> countries = CountryService.GetAllCountries();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            countries = countries.Where(c => c != null && c.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        return countries;
+    }
+
+    private async Task<IEnumerable<string>> UserNameCheck(string value)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(value))
+            errors.Add("Username is required!");
+
+        if ((value?.Length ?? 0) < 4)
+            errors.Add("Username must be at least of length 4.");
+
+        UsersViewModel userView = await UsersService.GetUsersByUserNameAsync(value, _currentLoginUser.Id);
+        if (userView != null)
+            errors.Add("Username already exist.");
+
+        userView = await UsersService.GetUsersByEmailAddressAsync(value, _currentLoginUser.Id);
+        if (userView != null)
+            errors.Add("Email already exist.");
+
+        return errors;
+    }
+
+    private async Task SaveUser()
+    {
+        try
+        {
+            _currentLoginUser.Updated = DateTime.UtcNow;
+            _currentLoginUser.UpdatedBy = _currentLoginUser.Id;
+            _currentLoginUser.CompanyId = _selectedCompany?.Id;
+            await UsersService.UpdateUsersAsync(_currentLoginUser);
+
+            Snackbar.Add("Successfully saved user information.", Severity.Success);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Error! Please try again.", Severity.Error);
+        }
+    }
+}

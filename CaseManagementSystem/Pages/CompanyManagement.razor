@@ -1,0 +1,137 @@
+﻿@page "/companymanagement"
+
+@using System.Net.Http.Json
+@using CaseManagementSystem.Data.Companies
+@using CaseManagementSystem.Data.Auth;
+
+@inject IDialogService Dialog
+@inject CompaniesService CompaniesService
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>User Management</PageTitle>
+
+<div class="d-flex align-content-center justify-end mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@((e) => OpenManageCompanyDialog(null))">Create</MudButton>
+</div>
+
+<MudTable Items="@_companies" Hover="true" Filter="new Func<CompaniesViewModel,bool>(FilterFuncCallBack)" @bind-SelectedItem="_selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Company Management</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh></MudTh>
+        <MudTh></MudTh>
+        <MudTh>Name</MudTh>
+        <MudTh>Contact</MudTh>
+        <MudTh>Contact Position</MudTh>
+        <MudTh>Address Line 1</MudTh>
+        <MudTh>Address Line 2</MudTh>
+        <MudTh>Address Line 3</MudTh>
+        <MudTh>City</MudTh>
+        <MudTh>County</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit Company" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageCompanyDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove Company" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Remove" OnClick="@((e) => RemoveCompany(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Name">@context.CompanyName</MudTd>
+        <MudTd DataLabel="Contact">@context.KeyContact</MudTd>
+        <MudTd DataLabel="Contact Position">@context.KeyContactRole</MudTd>
+        <MudTd DataLabel="Address Line 1">@context.AddressLine1</MudTd>
+        <MudTd DataLabel="Address Line 2">@context.AddressLine2</MudTd>
+        <MudTd DataLabel="Address Line 3">@context.AddressLine3</MudTd>
+        <MudTd DataLabel="City">@context.City</MudTd>
+        <MudTd DataLabel="County">@context.County</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private CompaniesViewModel _selectedItem = null;
+    private IEnumerable<CompaniesViewModel> _companies = new List<CompaniesViewModel>();
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Client" || CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        await GetCompanies();
+    }
+
+    private async Task GetCompanies()
+    {
+        _companies = await CompaniesService.GetAllCompaniesAsync();
+    }
+
+    private bool FilterFuncCallBack(CompaniesViewModel company) => FilterFunc(company, _searchString);
+
+    private bool FilterFunc(CompaniesViewModel company, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if ((company?.CompanyName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((company?.KeyContact?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((company?.KeyContactRole?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+    }
+
+    private async Task OpenManageCompanyDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageCompany>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageCompany>("Company", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetCompanies();
+        }
+    }
+
+    private async Task RemoveCompany(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove this company record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await CompaniesService.DeleteCompaniesAsync(id);
+            await GetCompanies();
+
+            Snackbar.Add($"Successfully removed company.", Severity.Success);
+        }
+    }
+}

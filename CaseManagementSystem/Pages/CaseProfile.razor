@@ -1,0 +1,128 @@
+﻿@page "/caseprofile"
+
+@using System.Net.Http.Json
+@using CaseManagementSystem.Data.AgencyTypeCaseProfile;
+@using CaseManagementSystem.Data.CaseProfiles
+@using System.Net;
+@using CaseManagementSystem.Data.Auth;
+
+@inject IDialogService Dialog
+@inject CaseProfileService CaseProfileService
+@inject AgencyTypeCaseProfileService AgencyTypeCaseProfileService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Case Profile</PageTitle>
+
+<div class="d-flex align-content-center justify-end mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@((e) => OpenManageCaseProfileDialog(null))">Create</MudButton>
+</div>
+
+<MudTable Items="@_caseProfiles" Hover="true" Filter="new Func<CaseProfileViewModel,bool>(FilterFuncCallBack)" @bind-SelectedItem="_selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Case Profile</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTd></MudTd>
+        <MudTd></MudTd>
+        <MudTd>Case Description</MudTd>
+        <MudTd>Time Limit Name</MudTd>
+        <MudTd>Case Type Name</MudTd>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit Case Profile" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageCaseProfileDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove Case Profile" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Remove" OnClick="@((e) => RemoveCaseProfile(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Case Description">@context.CaseDescription</MudTd>
+        <MudTd DataLabel="Time Limit Name">@context.TimeLimitName</MudTd>
+        <MudTd DataLabel="Case Type Name">@context.CaseTypeName</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private CaseProfileViewModel _selectedItem = null;
+    private IEnumerable<CaseProfileViewModel> _caseProfiles = new List<CaseProfileViewModel>();
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Client" || CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        await GetCaseProfiles();
+    }
+
+    private async Task GetCaseProfiles()
+    {
+        _caseProfiles = await CaseProfileService.GetAllCaseProfilesAsync();
+    }
+
+    private bool FilterFuncCallBack(CaseProfileViewModel caseProfile) => FilterFunc(caseProfile, _searchString);
+
+    private bool FilterFunc(CaseProfileViewModel caseProfile, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if ((caseProfile?.CaseDescription?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+
+    }
+
+    private async Task OpenManageCaseProfileDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageCaseProfile>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageCaseProfile>("Case Profile", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetCaseProfiles();
+        }
+    }
+
+    private async Task RemoveCaseProfile(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove this case profile record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await AgencyTypeCaseProfileService.DeleteAgencyTypeCaseProfileAsync(id);
+            await CaseProfileService.DeleteCaseProfilesAsync(id);
+            await GetCaseProfiles();
+
+            Snackbar.Add($"Successfully removed case profile.", Severity.Success);
+        }
+    }
+}

@@ -1,0 +1,120 @@
+﻿@page "/tracereason"
+
+@using System.Net.Http.Json
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.TraceReason
+@using System.Net;
+
+@inject IDialogService Dialog
+@inject TraceReasonService TraceReasonService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Trace Reason</PageTitle>
+
+<div class="d-flex align-content-center justify-end mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@((e) => OpenManageTraceReasonDialog(null))">Create</MudButton>
+</div>
+
+<MudTable Items="@_traceReason" Hover="true" @bind-SelectedItem="_selectedItem" Filter="new Func<TraceReasonViewModel,bool>(FilterFuncCallBack)">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6"> Trace Reason</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTd></MudTd>
+        <MudTd></MudTd>
+        <MudTd>Name</MudTd>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit Trace Reason" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageTraceReasonDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove Trace Reason" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Remove" OnClick="@((e) => RemoveTraceReason(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Name">@context.Name</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private IEnumerable<TraceReasonViewModel> _traceReason = new List<TraceReasonViewModel>();
+    private TraceReasonViewModel _selectedItem = null;
+    private string _searchString = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        await GetTraceReason();
+    }
+
+    private async Task GetTraceReason()
+    {
+        _traceReason = await TraceReasonService.GetAllTraceReasonsAsync();
+    }
+
+    private bool FilterFuncCallBack(TraceReasonViewModel traceReason) => FilterFunc(traceReason, _searchString);
+
+    private bool FilterFunc(TraceReasonViewModel traceReason, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if ((traceReason?.Name?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+    }
+
+    private async Task OpenManageTraceReasonDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageTraceReason>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageTraceReason>("Trace Reason", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetTraceReason();
+        }
+    }
+
+    private async Task RemoveTraceReason(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove this trace reason record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await TraceReasonService.DeleteTraceReasonAsync(id);
+            await GetTraceReason();
+
+            Snackbar.Add($"Successfully removed trace reason.", Severity.Success);
+        }
+    }
+}

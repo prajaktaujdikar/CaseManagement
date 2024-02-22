@@ -1,0 +1,160 @@
+﻿@page "/subjects"
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Subjects;
+@using CaseManagementSystem.Data.Users;
+
+@inject IDialogService Dialog
+@inject UsersService UsersService
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject SubjectService SubjectService
+
+<PageTitle>Subjects</PageTitle>
+
+<div class="d-flex align-content-center justify-end mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@((e) => OpenManageSubjectsDialog(null))">Create</MudButton>
+</div>
+
+<MudTable Items="@_subjects" Hover="true" Filter="new Func<SubjectViewModel,bool>(FilterFuncCallBack)" @bind-SelectedItem="_selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Subjects</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh></MudTh>
+        <MudTh></MudTh>
+        <MudTh>Firstname</MudTh>
+        <MudTh>Lastname</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Telephone Number</MudTh>
+        <MudTh>Associated Company</MudTh>
+        <MudTh>Address1</MudTh>
+        <MudTh>City</MudTh>
+        <MudTh>Post Code</MudTh>
+        <MudTh>Country</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit Subject" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageSubjectsDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove Subject" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Remove" OnClick="@((e) => RemoveSubject(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Firstname">@context.FirstName</MudTd>
+        <MudTd DataLabel="Lastname">@context.LastName</MudTd>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="Telephone Number">@context.TelephoneNumber</MudTd>
+        <MudTd DataLabel="Associated Company">@context.CompanyName</MudTd>
+        <MudTd DataLabel="Address1">@context.AddressLine1</MudTd>
+        <MudTd DataLabel="City">@context.City</MudTd>
+        <MudTd DataLabel="Post Code">@context.Postcode</MudTd>
+        <MudTd DataLabel="Country">@context.Country</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private SubjectViewModel _selectedItem = null;
+    private IEnumerable<SubjectViewModel> _subjects = new List<SubjectViewModel>();
+    private string _searchString = "";
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        await GetSubjects();
+    }
+
+    private async Task GetSubjects()
+    {
+        if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+        {
+            _subjects = await SubjectService.GetAllSubjectsWithCaseAsync();
+        }
+        else
+        {
+            _subjects = await SubjectService.GetSubjectsByClientAsync(_currentLoginUser.Id);
+        }
+    }
+
+    private bool FilterFuncCallBack(SubjectViewModel subject) => FilterFunc(subject, _searchString);
+
+    private bool FilterFunc(SubjectViewModel subject, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if ((subject?.FirstName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.LastName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.Email?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.TelephoneNumber?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.CompanyName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.AddressLine1?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.City?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.Country?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((subject?.Postcode?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+    }
+
+    private async Task OpenManageSubjectsDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageUser>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageSubjects>("Subjects", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetSubjects();
+        }
+    }
+
+    private async Task RemoveSubject(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove this subject record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await SubjectService.DeleteSubjectsAsync(id);
+            await GetSubjects();
+
+            Snackbar.Add($"Successfully removed subject.", Severity.Success);
+        }
+    }
+}

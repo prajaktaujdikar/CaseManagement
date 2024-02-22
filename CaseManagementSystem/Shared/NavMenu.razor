@@ -1,0 +1,100 @@
+﻿@using CaseManagementSystem.Data.Auth;
+
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudNavMenu>
+    <MudNavLink Match="NavLinkMatch.All" Href="">
+        Home
+    </MudNavLink>
+    @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+    {
+        <MudNavLink Match="NavLinkMatch.All" Href="companymanagement">
+            Company
+        </MudNavLink>
+    }
+    @if (CustomAuthenticationStateProvider.RoleType() != "Agent")
+    {
+        <MudNavLink Match="NavLinkMatch.All" Href="cases">
+            Cases
+        </MudNavLink>
+    }
+    @if (CustomAuthenticationStateProvider.RoleType() == "Agent")
+    {
+        <MudNavLink Match="NavLinkMatch.All" Href="agentcase">
+            Cases
+        </MudNavLink>
+    }
+    @if (CustomAuthenticationStateProvider.RoleType() != "Agent")
+    {
+        <MudNavLink Match="NavLinkMatch.All" Href="usermanagement">
+            Users
+        </MudNavLink>
+    }
+    @if (CustomAuthenticationStateProvider.RoleType() != "Agent")
+    {
+        <MudNavGroup Title="Master Data" Expanded="true">
+            @if (CustomAuthenticationStateProvider.RoleType() != "Agent")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="rolemanagement">
+                    Role Management
+                </MudNavLink>
+            }
+
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="agencytype">
+                    Agency Type
+                </MudNavLink>
+            }
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="casetype">
+                    Case Type
+                </MudNavLink>
+            }
+
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="caseprofile">
+                    Case Profile
+                </MudNavLink>
+            }
+            @if (CustomAuthenticationStateProvider.RoleType() != "Agent")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="subjects">
+                    Subjects
+                </MudNavLink>
+            }
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="timelimit">
+                    Time Limit
+                </MudNavLink>
+            }
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="tracelevel">
+                    Trace Level
+                </MudNavLink>
+            }
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="titleprefix">
+                    Title Prefix
+                </MudNavLink>
+            }
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="tracereason">
+                    Trace Reason
+                </MudNavLink>
+            }
+            @if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+            {
+                <MudNavLink Match="NavLinkMatch.All" Href="traceresult">
+                    Trace Result
+                </MudNavLink>
+            }
+        </MudNavGroup>
+    }
+</MudNavMenu>

@@ -1,0 +1,344 @@
+﻿@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Companies;
+@using CaseManagementSystem.Data.TitlePrefixes;
+@using CaseManagementSystem.Data.Enum;
+@using CaseManagementSystem.Data.Subjects;
+@using CaseManagementSystem.Data.Documents;
+@using CaseManagementSystem.Data.Users;
+@using System.ComponentModel.DataAnnotations;
+@using System.Text;
+@using System.Text.RegularExpressions;
+
+@inject UsersService UsersService
+@inject CompaniesService CompaniesService
+@inject CountryService CountryService
+@inject TitlePrefixeService TitlePrefixeService
+@inject DocumentService DocumentService
+@inject SubjectService SubjectService
+@inject ISnackbar Snackbar
+@inject IDialogService Dialog
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudCard>
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Details</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudDivider />
+                            <MudCardContent>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.FirstName" Label="First Name" Variant="Variant.Outlined" Required="true" RequiredError="Firstname is required!"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.MiddleName" Label="Middle Name" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.LastName" Label="Last Name" Variant="Variant.Outlined" Required="true" RequiredError="Lastname is required!"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center">
+                                    <MudAutocomplete T="CompaniesViewModel" Label="Company" @bind-Value="_selectedCompany" SearchFunc="@SearchCompanies" ToStringFunc="@(e=> e==null?null : $"{e.CompanyName}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                                    </MudAutocomplete>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="@((e) => OpenManageCompanyDialog(null))" Class="ml-3">Add Company</MudButton>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudAutocomplete T="TitlePrefixeViewModel" Label="Title Prefix" @bind-Value="_selectedTitlePrefix" SearchFunc="@SearchTitlePrefixes" ToStringFunc="@(e=> e==null?null : $"{e.Name}")" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                                    </MudAutocomplete>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.Alias" Label="Alias" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.TelephoneNumber" Label="Tel No" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.Email" Label="Email" Variant="Variant.Outlined" Required="true" RequiredError="Email is required!"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.Notes" Label="Notes" Variant="Variant.Outlined" Clearable="true" Lines="3" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudDatePicker Label="Date of Birth" @bind-Date="_subjectsView.DateOfBirth" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudFileUpload T="IReadOnlyList<IBrowserFile>" Accept=".pdf, .doc, .txt, .jpeg, .jpg, .png" FilesChanged="UploadDocumentFile">
+                                        <ButtonTemplate>
+                                            <MudButton FullWidth
+                                                       HtmlTag="label"
+                                                       Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       StartIcon="@Icons.Material.Filled.CloudUpload"
+                                                       for="@context">
+                                                 Choose Files
+                                            </MudButton>
+                                        </ButtonTemplate>
+                                         <SelectedTemplate>
+                                             @if (context != null)
+                                            {
+                                                @foreach (var file in context)
+                                                {
+                                                    <MudText>@file.Name</MudText>
+                                                }
+                                            }
+                                            else if (_documents != null && _documents.Count > 0)
+                                            {
+                                                @foreach (var document in _documents)
+                                                {
+                                                    <MudText>@document.FileName</MudText>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <MudText>No Files</MudText>
+                                            }
+                                        </SelectedTemplate>
+                                    </MudFileUpload>
+                                </MudItem>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="6">
+                        <MudCard>
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">Address</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudDivider />
+                            <MudCardContent>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.AddressLine1" Label="Address Line 1" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.AddressLine2" Label="Address Line 2" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.AddressLine3" Label="Address Line 3" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.City" Label="City" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.Postcode" Label="Post Code" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField T="string" @bind-Value="_subjectsView.County" Label="County" Variant="Variant.Outlined"></MudTextField>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudAutocomplete T="string" Label="Country" @bind-Value="_subjectsView.Country" SearchFunc="@SearchCountries" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                                    </MudAutocomplete>
+                                </MudItem>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSubject">Apply Changes</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private SubjectViewModel _subjectsView = new SubjectViewModel();
+    private List<DocumentViewModel> _documents = new List<DocumentViewModel>();
+    private List<DocumentViewModel> _newDocuments = new List<DocumentViewModel>();
+    private TitlePrefixeViewModel _selectedTitlePrefix = null;
+    private CompaniesViewModel _selectedCompany = null;
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+
+        if (Id != null && Id != Guid.Empty)
+        {
+            await GetSubjectsById();
+            await GetDocumentsByCaseId();
+            if (_subjectsView.AssociatedCompany != null && _subjectsView.AssociatedCompany != Guid.Empty)
+            {
+                _selectedCompany = await CompaniesService.GetCompaniesByIdAsync((Guid)_subjectsView.AssociatedCompany);
+            }
+            if (_subjectsView.TitlePrefixId != null && _subjectsView.TitlePrefixId != Guid.Empty)
+            {
+                _selectedTitlePrefix = await TitlePrefixeService.GetTitlePrefixesByIdAsync((Guid)_subjectsView.TitlePrefixId);
+            }
+        }
+
+        _loading = false;
+    }
+
+    private async Task GetSubjectsById()
+    {
+        _subjectsView = await SubjectService.GetSubjectsByIdAsync((Guid)Id);
+    }
+
+    private async Task GetDocumentsByCaseId()
+    {
+        IEnumerable<DocumentViewModel> documents = await DocumentService.GetDocumentsByCaseIdAsync((Guid)Id);
+        _documents = documents.ToList();
+    }
+
+    private async Task<IEnumerable<CompaniesViewModel>> SearchCompanies(string value)
+    {
+        IEnumerable<CompaniesViewModel> companiesView = await CompaniesService.GetAllCompaniesAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            companiesView = companiesView.Where(c => c.CompanyName != null && c.CompanyName.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        return companiesView;
+    }
+
+    private async Task<IEnumerable<TitlePrefixeViewModel>> SearchTitlePrefixes(string value)
+    {
+        IEnumerable<TitlePrefixeViewModel> titlePrefixes = await TitlePrefixeService.GetAllTitlePrefixesAsync();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            titlePrefixes = titlePrefixes.Where(c => c.Name != null && c.Name.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        return titlePrefixes;
+    }
+
+    private async Task<IEnumerable<string>> SearchCountries(string value)
+    {
+        await Task.Delay(5);
+
+        IEnumerable<string> countries = CountryService.GetAllCountries();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            countries = countries.Where(c => c != null && c.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        return countries;
+    }
+
+    private async Task<IEnumerable<string>> EmailCheck(string value)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(value))
+            errors.Add("Email is required!");
+
+        if (!new EmailAddressAttribute().IsValid(value))
+            errors.Add("Email is invalid.");
+
+        UsersViewModel userView = await UsersService.GetUsersByEmailAddressAsync(value, Id);
+        if (userView != null)
+            errors.Add("Username already exist.");
+
+        return errors;
+    }
+
+    private async Task UploadDocumentFile(IReadOnlyList<IBrowserFile> files)
+    {
+        foreach (var file in files)
+        {
+            DocumentViewModel document = new DocumentViewModel();
+
+            document.FileName = file.Name;
+            document.Size = file.Size;
+            document.DataContentType = file.ContentType;
+
+            using (var stream = file.OpenReadStream())
+            {
+                using (var memeoryStream = new MemoryStream())
+                {
+                    await stream.CopyToAsync(memeoryStream);
+                    document.Data = memeoryStream.ToArray();
+                }
+            }
+            document.Updated = DateTime.UtcNow;
+            document.UpdatedBy = _currentLoginUser.Id;
+            document.Created = DateTime.UtcNow;
+            document.CreatedBy = _currentLoginUser.Id;
+
+            _newDocuments.Add(document);
+        }
+    }
+
+    private async Task SaveSubject()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                _subjectsView.Updated = DateTime.UtcNow;
+                _subjectsView.UpdatedBy = _currentLoginUser.Id;
+                _subjectsView.AssociatedCompany = _selectedCompany?.Id;
+                _subjectsView.TitlePrefixId = _selectedTitlePrefix?.Id;
+
+                if (Id != null && Id != Guid.Empty)
+                {
+                    await SubjectService.UpdateSubjectsAsync(_subjectsView);
+                }
+                else
+                {
+                    _subjectsView.Created = DateTime.UtcNow;
+                    _subjectsView.CreatedBy = _currentLoginUser.Id;
+                    await SubjectService.InsertSubjectsAsync(_subjectsView);
+
+                    SubjectViewModel addedData = await SubjectService.GetLastSubjectsAsync();
+                    Id = addedData.Id;
+                }
+
+                foreach (DocumentViewModel document in _newDocuments)
+                {
+                    document.CaseId = Id;
+                    await DocumentService.InsertDocumentsAsync(document);
+                }
+
+                Snackbar.Add("Successfully saved Subject information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again.", Severity.Error);
+            }
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+    private async Task OpenManageCompanyDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageCompany>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageCompany>("Company", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            _subjectsView.AssociatedCompany = (Guid)result.Data;
+            if (_subjectsView.AssociatedCompany != null && _subjectsView.AssociatedCompany != Guid.Empty)
+            {
+                _selectedCompany = await CompaniesService.GetCompaniesByIdAsync((Guid)_subjectsView.AssociatedCompany);
+            }
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}  

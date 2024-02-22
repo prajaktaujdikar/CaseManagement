@@ -1,0 +1,95 @@
+﻿@using System.Net.Http.Json
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.TimeLimits
+@using System.Net;
+@using CaseManagementSystem.Data.Users;
+
+@inject IDialogService Dialog
+@inject TimeLimitService TimeLimitService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject UsersService UsersService
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_timeLimitView.Name" Label="Name" Variant="Variant.Outlined" Required="true" RequiredError="Name is required!"></MudTextField>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTimeLimit">Apply Changes</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private TimeLimitViewModel _timeLimitView = new TimeLimitViewModel();
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id != null && Id != Guid.Empty)
+        {
+            await GetTimeLimitById();
+        }
+
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        _loading = false;
+    }
+
+    private async Task GetTimeLimitById()
+    {
+        _timeLimitView = await TimeLimitService.GetTimeLimitsByIdAsync((Guid)Id);
+    }
+
+    private async Task SaveTimeLimit()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                _timeLimitView.Updated = DateTime.UtcNow;
+                _timeLimitView.UpdatedBy = _currentLoginUser.Id;
+
+                if (Id != null && Id != Guid.Empty)
+                {
+                    await TimeLimitService.UpdateTimeLimitsAsync(_timeLimitView);
+                }
+                else
+                {
+                    _timeLimitView.Created = DateTime.UtcNow;
+                    _timeLimitView.CreatedBy = _currentLoginUser.Id;
+                    await TimeLimitService.InsertTimeLimitsAsync(_timeLimitView);
+                }
+                Snackbar.Add("Successfully saved Time Limit information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again", Severity.Error);
+            }
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+
+    void Cancel() => MudDialog.Cancel();
+}

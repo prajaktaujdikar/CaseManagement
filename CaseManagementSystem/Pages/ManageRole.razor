@@ -1,0 +1,84 @@
+﻿@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Enum;
+@using CaseManagementSystem.Data.Users;
+
+@inject UsersService UsersService
+@inject ISnackbar Snackbar
+@inject IDialogService Dialog
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12">
+                        <MudSelect T="byte?" @bind-Value="_usersView.RoleType" Label="Role" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                            @foreach (RoleType item in Enum.GetValues(typeof(RoleType)))
+                            {
+                                <MudSelectItem Value="(byte?)item">@item.ToString()</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveUser">Apply Changes</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid Id { get; set; }
+
+    private UsersViewModel _usersView = new UsersViewModel();
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetUserById();
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        _loading = false;
+    }
+
+    private async Task GetUserById()
+    {
+        _usersView = await UsersService.GetUsersByIdAsync(Id);
+    }
+
+    private async Task SaveUser()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                _usersView.Updated = DateTime.UtcNow;
+                _usersView.UpdatedBy = _currentLoginUser.Id;
+                await UsersService.UpdateUsersAsync(_usersView);
+
+                Snackbar.Add("Successfully saved user information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again.", Severity.Error);
+            }
+
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

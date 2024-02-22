@@ -1,0 +1,159 @@
+﻿@page "/cases"
+
+@using System.Net.Http.Json
+@using System.Net;
+@using CMS.DL.Model;
+@using CaseManagementSystem.Data.Cases;
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Users;
+
+@inject IDialogService Dialog
+@inject CaseService CaseService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject UsersService UsersService
+
+<PageTitle>Case</PageTitle>
+
+@if (CustomAuthenticationStateProvider.RoleType() != "Agent")
+{
+    <div class="d-flex align-content-center justify-end mb-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@((e) => OpenManageCaseDialog(null))">Create</MudButton>
+    </div>
+}
+
+<MudTable Items="@_cases" Hover="true" Filter="new Func<CaseViewModel,bool>(FilterFuncCallBack)" @bind-SelectedItem="_selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Case</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTd></MudTd>
+        <MudTd></MudTd>
+        <MudTd>Company</MudTd>
+        <MudTd>Client Ref</MudTd>
+        <MudTd>End Client</MudTd>
+        <MudTd>Case Number</MudTd>
+        <MudTd>Fee</MudTd>
+        <MudTd>Debt Amount</MudTd>
+        <MudTd>Trace Reason</MudTd>
+        <MudTd>Notes</MudTd>
+        <MudTd>Status</MudTd>
+        <MudTd>Subject</MudTd>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit Case" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageCaseDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove Case" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Remove" OnClick="@((e) => RemoveCase(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Company">@context.CompanyName</MudTd>
+        <MudTd DataLabel="Client Ref">@context.ClientName</MudTd>
+        <MudTd DataLabel="End Client">@context.AgentName</MudTd>
+        <MudTd DataLabel="Case Number">@context.CaseNumber</MudTd>
+        <MudTd DataLabel="Fee">@context.Fee</MudTd>
+        <MudTd DataLabel="Debt Amount">@context.DebtAmount</MudTd>
+        <MudTd DataLabel="Trace Reason">@context.TraceReasonName</MudTd>
+        <MudTd DataLabel="Notes">@context.Notes</MudTd>
+        <MudTd DataLabel="Status">@context.GetStatusName()</MudTd>
+        <MudTd DataLabel="Subject">@context.SubjectName</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+
+    private CaseViewModel _selectedItem = null;
+    private IEnumerable<CaseViewModel> _cases = new List<CaseViewModel>();
+    private string _searchString = "";
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        await GetCases();
+    }
+
+    private async Task GetCases()
+    {
+        if (CustomAuthenticationStateProvider.RoleType() == "Admin")
+        {
+            _cases = await CaseService.GetAllCasesAsync();
+        }
+        else
+        {
+            _cases = await CaseService.GetCasesByClientAsync(_currentLoginUser.Id);
+        }
+    }
+
+    private bool FilterFuncCallBack(CaseViewModel cases) => FilterFunc(cases, _searchString);
+
+    private bool FilterFunc(CaseViewModel cases, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+
+        if ((cases?.CompanyName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((cases?.CaseNumber?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((cases?.GetStatusName()?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+    }
+
+    private async Task OpenManageCaseDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageCase>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageCase>("Case", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetCases();
+        }
+    }
+
+    private async Task RemoveCase(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove this case record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await CaseService.DeleteCasesAsync(id);
+            await GetCases();
+
+            Snackbar.Add($"Successfully removed case.", Severity.Success);
+        }
+    }
+}

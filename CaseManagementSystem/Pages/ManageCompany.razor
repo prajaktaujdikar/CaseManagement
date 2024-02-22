@@ -1,0 +1,161 @@
+﻿@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Companies;
+@using CaseManagementSystem.Data.Enum;
+@using CaseManagementSystem.Data.Users;
+@using System.ComponentModel.DataAnnotations;
+@using System.Text;
+@using System.Text.RegularExpressions;
+
+@inject UsersService UsersService
+@inject CompaniesService CompaniesService
+@inject CountryService CountryService
+@inject ISnackbar Snackbar
+@inject IDialogService Dialog
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.CompanyName" Label="Company Name" Variant="Variant.Outlined" Required="true" RequiredError="Company name is required!"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.AddressLine1" Label="Address Line 1" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.KeyContact" Label="Key Contact" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.AddressLine2" Label="Address Line 2" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.KeyContactRole" Label="Key Contact Role" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.AddressLine3" Label="Address Line 3" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.Email" Label="Email" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.County" Label="County" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+
+                    <MudItem xs="6">
+                        <MudTextField T="string" @bind-Value="_companiesView.InvoiceEmail" Label="Invoice Email" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="3">
+                        <MudTextField T="string" @bind-Value="_companiesView.City" Label="City" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+                    <MudItem xs="3">
+                        <MudTextField T="string" @bind-Value="_companiesView.Postcode" Label="Post code" Variant="Variant.Outlined"></MudTextField>
+                    </MudItem>
+
+                    <MudItem xs="6">
+                        <MudSelect T="byte?" @bind-Value="_companiesView.CompanyType" Label="Company Type" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter" Required="true" RequiredError="Company type is required!">
+                            @foreach (CompanyType item in Enum.GetValues(typeof(CompanyType)))
+                            {
+                                <MudSelectItem Value="(byte?)item">@item.ToString()</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudAutocomplete T="string" Label="Country" @bind-Value="_companiesView.Country" SearchFunc="@SearchCountries" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        </MudAutocomplete>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCompany">Apply Changes</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private CompaniesViewModel _companiesView = new CompaniesViewModel();
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id != null && Id != Guid.Empty)
+        {
+            await GetCompanyById();
+        }
+
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        _loading = false;
+    }
+
+    private async Task GetCompanyById()
+    {
+        _companiesView = await CompaniesService.GetCompaniesByIdAsync((Guid)Id);
+    }
+
+    private async Task<IEnumerable<string>> SearchCountries(string value)
+    {
+        await Task.Delay(5);
+
+        IEnumerable<string> countries = CountryService.GetAllCountries();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            countries = countries.Where(c => c != null && c.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+        }
+
+        return countries;
+    }
+
+    private async Task SaveCompany()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                _companiesView.Updated = DateTime.UtcNow;
+                _companiesView.UpdatedBy = _currentLoginUser.Id;
+
+                if (Id != null && Id != Guid.Empty)
+                {
+                    await CompaniesService.UpadteCompaniesAsync(_companiesView);
+                }
+                else
+                {
+                    _companiesView.Created = DateTime.UtcNow;
+                    _companiesView.CreatedBy = _currentLoginUser.Id;
+                    await CompaniesService.InsertCompaniesAsync(_companiesView);
+
+                    CompaniesViewModel addedData = await CompaniesService.GetLastCompaniesAsync();
+                    Id = addedData.Id;
+                }
+                Snackbar.Add("Successfully saved company information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again.", Severity.Error);
+            }
+
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

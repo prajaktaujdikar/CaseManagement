@@ -1,0 +1,20 @@
+﻿@page "/index"
+
+@using CaseManagementSystem.Data.Auth;
+
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Home</PageTitle>
+
+Welcome to your new app.
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+    }
+}

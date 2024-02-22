@@ -1,0 +1,122 @@
+﻿@page "/casetype"
+
+@using System.Net.Http.Json
+@using CaseManagementSystem.Data.CaseTypes
+@using System.Net;
+@using CaseManagementSystem.Data.Auth;
+
+@inject IDialogService Dialog
+@inject CaseTypeService CaseTypeService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Case Type</PageTitle>
+
+<div class="d-flex align-content-center justify-end mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@((e) => OpenManageCaseTypeDialog(null))">Create</MudButton>
+</div>
+
+<MudTable Items="@_caseTypes" Hover="true" Filter="new Func<CaseTypeViewModel,bool>(FilterFuncCallBack)" @bind-SelectedItem="_selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Case Type</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTd></MudTd>
+        <MudTd></MudTd>
+        <MudTd>Name</MudTd>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit Case Type" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageCaseTypeDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove Case Type" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Remove" OnClick="@((e) => RemoveCaseType(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Name">@context.Name</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+
+    private CaseTypeViewModel _selectedItem = null;
+    private IEnumerable<CaseTypeViewModel> _caseTypes = new List<CaseTypeViewModel>();
+    private string _searchString = "";
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Client" || CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        await GetCaseTypes();
+    }
+
+    private async Task GetCaseTypes()
+    {
+        _caseTypes = await CaseTypeService.GetAllCaseTypesAsync();
+    }
+
+    private bool FilterFuncCallBack(CaseTypeViewModel caseType) => FilterFunc(caseType, _searchString);
+
+    private bool FilterFunc(CaseTypeViewModel caseType, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if ((caseType?.Name?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+    }
+
+    private async Task OpenManageCaseTypeDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageCaseType>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageCaseType>("Case Type", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetCaseTypes();
+        }
+    }
+
+    private async Task RemoveCaseType(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove this case type record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await CaseTypeService.DeleteCaseTypesAsync(id);
+            await GetCaseTypes();
+
+            Snackbar.Add($"Successfully removed case type.", Severity.Success);
+        }
+    }
+}

@@ -1,0 +1,93 @@
+﻿@using System.Net.Http.Json
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.TraceReason
+@using System.Net;
+@using CaseManagementSystem.Data.Users;
+
+@inject IDialogService Dialog
+@inject TraceReasonService TraceReasonService
+@inject ISnackbar Snackbar
+@inject UsersService UsersService
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+
+<MudDivider />
+
+<MudForm @ref="_form">
+    <MudDialog>
+        <DialogContent>
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="@Color.Info" Style="position:absolute;top:0;right:0" />
+            }
+            <MudPaper Elevation="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12">
+                        <MudTextField T="string" @bind-Value="_TraceReasonView.Name" Label="Name" Variant="Variant.Outlined" Required="true" RequiredError="Name is required!"></MudTextField>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTraceReason">Apply Changes</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private TraceReasonViewModel _TraceReasonView = new TraceReasonViewModel();
+    private MudForm _form;
+    private bool _loading = true;
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id != null && Id != Guid.Empty)
+        {
+            await GetTraceReasonById();
+        }
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        _loading = false;
+    }
+
+    private async Task GetTraceReasonById()
+    {
+        _TraceReasonView = await TraceReasonService.GetTraceReasonByIdAsync((Guid)Id);
+    }
+
+    private async Task SaveTraceReason()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            try
+            {
+                _TraceReasonView.Updated = DateTime.UtcNow;
+                _TraceReasonView.UpdatedBy = _currentLoginUser.Id;
+
+                if (Id != null && Id != Guid.Empty)
+                {
+                    await TraceReasonService.UpdateTraceReasonAsync(_TraceReasonView);
+                }
+                else
+                {
+                    _TraceReasonView.Created = DateTime.UtcNow;
+                    _TraceReasonView.CreatedBy = _currentLoginUser.Id;
+                    await TraceReasonService.InsertTraceReasonAsync(_TraceReasonView);
+                }
+                Snackbar.Add("Successfully saved Trace Reason information.", Severity.Success);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add("Error! Please try again.", Severity.Error);
+            }
+            MudDialog.Close(DialogResult.Ok(Id));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

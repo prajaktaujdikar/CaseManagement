@@ -1,0 +1,123 @@
+﻿@page "/traceresult"
+
+@using System.Net.Http.Json
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.TraceResults
+@using System.Net;
+
+@inject IDialogService Dialog
+@inject TraceResultsService TraceResultsService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Trace Result</PageTitle>
+
+
+<div class="d-flex align-content-center justify-end mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@((e) => OpenManageTraceResultDialog(null))">Create</MudButton>
+</div>
+
+<MudTable Items="@_traceResults" Hover="true" Filter="new Func<TraceResultViewModel,bool>(FilterFuncCallBack)" @bind-SelectedItem="_selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Trace Result</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTd></MudTd>
+        <MudTd></MudTd>
+        <MudTd>Name</MudTd>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit Trace Result" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageTraceResultDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove Trace Result" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Remove" OnClick="@((e) => RemoveTraceResult(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Name">@context.Name</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+
+    private TraceResultViewModel _selectedItem = null;
+    private IEnumerable<TraceResultViewModel> _traceResults = new List<TraceResultViewModel>();
+    private string _searchString = "";
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        await GetTraceResults();
+    }
+
+    private async Task GetTraceResults()
+    {
+        _traceResults = await TraceResultsService.GetAllTraceResultsAsync();
+    }
+
+    private bool FilterFuncCallBack(TraceResultViewModel traceResult) => FilterFunc(traceResult, _searchString);
+
+    private bool FilterFunc(TraceResultViewModel traceResult, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if ((traceResult?.Name?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+    }
+
+    private async Task OpenManageTraceResultDialog(Guid? Id)
+    {
+        var parameters = new DialogParameters<ManageTraceResult>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageTraceResult>("Trace Result", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetTraceResults();
+        }
+    }
+
+    private async Task RemoveTraceResult(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove this trace result record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await TraceResultsService.DeleteTraceResultsAsync(id);
+            await GetTraceResults();
+
+            Snackbar.Add($"Successfully removed trace result.", Severity.Success);
+        }
+    }
+}

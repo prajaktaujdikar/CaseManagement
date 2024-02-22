@@ -1,0 +1,144 @@
+﻿@page "/rolemanagement"
+
+@using System.Net.Http.Json
+@using CaseManagementSystem.Data.Auth;
+@using CaseManagementSystem.Data.Users
+
+@inject IDialogService Dialog
+@inject UsersService UsersService
+@inject ISnackbar Snackbar
+@inject CustomAuthenticationStateProvider CustomAuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Role Management</PageTitle>
+
+<MudTable Items="@_users" Hover="true" Filter="new Func<UsersViewModel,bool>(FilterFuncCallBack)" @bind-SelectedItem="_selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Role Management</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh></MudTh>
+        <MudTh></MudTh>
+        <MudTh>Username</MudTh>
+        <MudTh>Role</MudTh>
+        <MudTh>Firstname</MudTh>
+        <MudTh>Lastname</MudTh>
+        <MudTh>User Email</MudTh>
+        <MudTh>Company</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Edit">
+            <MudTooltip Text="Edit User Role" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => OpenManageUserRoleDialog(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Remove">
+            <MudTooltip Text="Remove User Role" Color="Color.Primary" Placement="Placement.Top">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" aria-label="Edit" OnClick="@((e) => RemoveUserRole(@context.Id))"></MudIconButton>
+            </MudTooltip>
+        </MudTd>
+        <MudTd DataLabel="Username">@context.UserName</MudTd>
+        <MudTd DataLabel="Role">@context.GetRoleTypeName()</MudTd>
+        <MudTd DataLabel="Firstname">@context.FirstName</MudTd>
+        <MudTd DataLabel="Lastname">@context.LastName</MudTd>
+        <MudTd DataLabel="User Email">@context.EmailAddress</MudTd>
+        <MudTd DataLabel="Company">@context.CompanyName</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private UsersViewModel _selectedItem = null;
+    private IEnumerable<UsersViewModel> _users = new List<UsersViewModel>();
+    private string _searchString = "";
+    private UsersViewModel _currentLoginUser = new UsersViewModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CustomAuthenticationStateProvider.IsAuthenticated())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+
+        if (CustomAuthenticationStateProvider.RoleType() == "Agent")
+        {
+            NavigationManager.NavigateTo("/index");
+        }
+
+        _currentLoginUser = await UsersService.CheckLogin(CustomAuthenticationStateProvider.UserName());
+        await GetUsers();
+    }
+
+    private async Task GetUsers()
+    {
+        if (CustomAuthenticationStateProvider.RoleType() != "Admin")
+        {
+            _users = await UsersService.GetAllUsersByClientAsync(_currentLoginUser.Id);
+        }
+        else
+        {
+            _users = await UsersService.GetAllUsersAsync();
+        }
+    }
+
+    private bool FilterFuncCallBack(UsersViewModel user) => FilterFunc(user, _searchString);
+
+    private bool FilterFunc(UsersViewModel user, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if ((user?.UserName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((user?.FirstName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((user?.LastName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((user?.GetRoleTypeName()?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((user?.EmailAddress?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+        if ((user?.CompanyName?.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ?? false)
+            return true;
+
+        return false;
+    }
+
+    private async Task OpenManageUserRoleDialog(Guid Id)
+    {
+        var parameters = new DialogParameters<ManageRole>();
+        parameters.Add(x => x.Id, Id);
+
+        DialogOptions options = new DialogOptions() { MaxWidth = MaxWidth.Medium, CloseButton = true };
+
+        DialogResult result = await Dialog.Show<ManageRole>("User Role", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await GetUsers();
+        }
+    }
+
+    private async Task RemoveUserRole(Guid id)
+    {
+        var parameters = new DialogParameters<DeleteConfirmation>();
+        parameters.Add(x => x.ContentText, $"Do you really want to remove role from this record?");
+        parameters.Add(x => x.ButtonText, "Yes");
+        parameters.Add(x => x.Color, Color.Error);
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        DialogResult result = await Dialog.Show<DeleteConfirmation>("Confirmation", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            await UsersService.UpdateUsersRoleTypeAsync(id, null, _currentLoginUser.Id);
+            await GetUsers();
+
+            Snackbar.Add($"Successfully removed role from user.", Severity.Success);
+        }
+    }
+}
